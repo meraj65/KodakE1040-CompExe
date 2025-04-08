@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Drawing.Imaging;
 using System.Net;
 using System.Net.Http;
 using System.Web.Http;
@@ -148,6 +149,70 @@ namespace KodakE1040_redExe.Controllers
                     status = "ERROR",
                     message = ex.Message,
                     scannedContentBinary = new byte[0]
+                });
+            }
+        }
+
+        /// <summary>
+        /// Scans an image and returns the base64-encoded grayscal content.
+        /// </summary>
+        [HttpGet]
+        [Route("base64_grayscale")]
+        public HttpResponseMessage Base64_grayscale()
+        {
+            var response = new
+            {
+                stage = "",
+                status = "",
+                message = "",
+                scannedContentBase64 = ""
+            };
+
+            try
+            {
+                // ✅ Step 1: Get the scanner device
+                response = new { stage = "GET_SCANNER", status = "PROCESSING", message = "Searching for scanner...", scannedContentBase64 = "" };
+                DeviceManager deviceManager = new DeviceManager();
+                DeviceInfo scannerDevice = GetScannerDevice(deviceManager);
+
+                if (scannerDevice == null)
+                {
+                    return Request.CreateResponse(HttpStatusCode.BadRequest, new { stage = "GET_SCANNER", status = "ERROR", message = "No scanner found!", scannedContentBase64 = "" });
+                }
+
+                // ✅ Step 2: Connect to the scanner
+                response = new { stage = "CONNECT_TO_SCANNER", status = "PROCESSING", message = "Connecting to scanner...", scannedContentBase64 = "" };
+                Device scanner = scannerDevice.Connect();
+
+                // ✅ Step 3: Start scanning
+                response = new { stage = "GET_SCANNED_IMAGE", status = "PROCESSING", message = "Scanning in progress...", scannedContentBase64 = "" };
+                Item scanItem = scanner.Items[1];
+
+                //SetScannerProperties(scanItem
+                SetScannerProperty(scanItem.Properties, 6146, 2); // Color mode: 1 = B/W, 2 = Grayscale, 3 = Color
+                SetScannerProperty(scanItem.Properties, 6147, Dpi); // DPI (Resolution)
+                SetScannerProperty(scanItem.Properties, 6148, Pixel); // Bits per pixel
+                CommonDialog dialog = new CommonDialog();
+                ImageFile imageFile = (ImageFile)dialog.ShowTransfer(scanItem, FormatType, false);
+                byte[] imageBytes = (byte[])imageFile.FileData.get_BinaryData();
+                string base64String = Convert.ToBase64String(imageBytes);
+
+                return Request.CreateResponse(HttpStatusCode.OK, new
+                {
+                    stage = "COMPLETED",
+                    status = "SUCCESS",
+                    message = "Scanning completed successfully.",
+                    scannedContentBase64 = base64String
+                });
+            }
+            catch (Exception ex)
+            {
+                return Request.CreateResponse(HttpStatusCode.InternalServerError, new
+                {
+                    stage = response.stage,
+                    status = "ERROR",
+                    message = ex.Message,
+                    scannedContentBase64 = ""
                 });
             }
         }
